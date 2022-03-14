@@ -89,6 +89,10 @@ const date::time_zone* waybar::modules::Clock::current_timezone() {
   return time_zones_[current_time_zone_idx_] ? time_zones_[current_time_zone_idx_] : date::current_zone();
 }
 
+std::string waybar::modules::Clock::get_format_for_timezone(const date::time_zone& zone) const {
+  return config_.get("format-" + zone.name(), format_).asString();
+}
+
 bool waybar::modules::Clock::is_timezone_fixed() {
   return time_zones_[current_time_zone_idx_] != nullptr;
 }
@@ -99,13 +103,14 @@ auto waybar::modules::Clock::update() -> void {
   waybar_time wtime = {locale_,
                        date::make_zoned(time_zone, date::floor<std::chrono::seconds>(now))};
   std::string text = "";
+  std::string timezone_format = get_format_for_timezone(*time_zone);
   if (!is_timezone_fixed()) {
     // As date dep is not fully compatible, prefer fmt
     tzset();
     auto localtime = fmt::localtime(std::chrono::system_clock::to_time_t(now));
-    text = fmt::format(locale_, format_, localtime);
+    text = fmt::format(locale_, timezone_format, localtime);
   } else {
-    text = fmt::format(format_, wtime);
+    text = fmt::format(timezone_format, wtime);
   }
   label_.set_markup(text);
 
@@ -234,7 +239,9 @@ auto waybar::modules::Clock::timezones_text(std::chrono::system_clock::time_poin
       timezone = date::current_zone();
     }
     wtime = {locale_, date::make_zoned(timezone, date::floor<std::chrono::seconds>(*now))};
-    os << fmt::format(format_, wtime) << "\n";
+
+    std::string timezone_format_config = get_format_for_timezone(*timezone);
+    os << fmt::format(timezone_format_config, wtime) << "\n";
   }
   return os.str();
 }
