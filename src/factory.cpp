@@ -12,6 +12,16 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
       return new waybar::modules::Battery(id, config_[name]);
     }
 #endif
+#ifdef HAVE_GAMEMODE
+    if (ref == "gamemode") {
+      return new waybar::modules::Gamemode(id, config_[name]);
+    }
+#endif
+#ifdef HAVE_UPOWER
+    if (ref == "upower") {
+      return new waybar::modules::upower::UPower(id, config_[name]);
+    }
+#endif
 #ifdef HAVE_SWAY
     if (ref == "sway/mode") {
       return new waybar::modules::sway::Mode(id, config_[name]);
@@ -23,7 +33,7 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
       return new waybar::modules::sway::Window(id, bar_, config_[name]);
     }
     if (ref == "sway/language") {
-        return new waybar::modules::sway::Language(id, config_[name]);
+      return new waybar::modules::sway::Language(id, config_[name]);
     }
 #endif
 #ifdef HAVE_WLR
@@ -39,6 +49,9 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
 #ifdef HAVE_RIVER
     if (ref == "river/tags") {
       return new waybar::modules::river::Tags(id, bar_, config_[name]);
+    }
+    if (ref == "river/window") {
+      return new waybar::modules::river::Window(id, bar_, config_[name]);
     }
 #endif
     if (ref == "idle_inhibitor") {
@@ -96,6 +109,9 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
     }
 #endif
 #ifdef HAVE_GIO_UNIX
+    if (ref == "bluetooth") {
+      return new waybar::modules::Bluetooth(id, config_[name]);
+    }
     if (ref == "inhibitor") {
       return new waybar::modules::Inhibitor(id, bar_, config_[name]);
     }
@@ -103,13 +119,6 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
     if (ref == "temperature") {
       return new waybar::modules::Temperature(id, config_[name]);
     }
-#if defined(__linux__)
-#  ifdef WANT_RFKILL
-    if (ref == "bluetooth") {
-      return new waybar::modules::Bluetooth(id, config_[name]);
-    }
-#  endif
-#endif
     if (ref.compare(0, 7, "custom/") == 0 && ref.size() > 7) {
       return new waybar::modules::Custom(ref.substr(7), id, config_[name]);
     }

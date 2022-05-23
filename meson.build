@@ -1,6 +1,6 @@
 project(
     'waybar', 'cpp', 'c',
-    version: '0.9.12',
+    version: '0.9.13',
     license: 'MIT',
     meson_version: '>= 0.49.0',
     default_options : [
@@ -86,12 +86,13 @@ wayland_cursor = dependency('wayland-cursor')
 wayland_protos = dependency('wayland-protocols')
 gtkmm = dependency('gtkmm-3.0', version : ['>=3.22.0'])
 dbusmenu_gtk = dependency('dbusmenu-gtk3-0.4', required: get_option('dbusmenu-gtk'))
-giounix = dependency('gio-unix-2.0', required: (get_option('dbusmenu-gtk').enabled() or get_option('logind').enabled()))
+giounix = dependency('gio-unix-2.0', required: (get_option('dbusmenu-gtk').enabled() or get_option('logind').enabled() or get_option('upower_glib').enabled()))
 jsoncpp = dependency('jsoncpp')
 sigcpp = dependency('sigc++-2.0')
 libepoll = dependency('epoll-shim', required: false)
 libnl = dependency('libnl-3.0', required: get_option('libnl'))
 libnlgen = dependency('libnl-genl-3.0', required: get_option('libnl'))
+upower_glib = dependency('upower-glib', required: get_option('upower_glib'))
 libpulse = dependency('libpulse', required: get_option('pulseaudio'))
 libudev = dependency('libudev', required: get_option('libudev'))
 libevdev = dependency('libevdev', required: get_option('libevdev'))
@@ -196,11 +197,23 @@ endif
 if true
     add_project_arguments('-DHAVE_RIVER', language: 'cpp')
     src_files += 'src/modules/river/tags.cpp'
+    src_files += 'src/modules/river/window.cpp'
 endif
 
 if libnl.found() and libnlgen.found()
     add_project_arguments('-DHAVE_LIBNL', language: 'cpp')
     src_files += 'src/modules/network.cpp'
+endif
+
+if (giounix.found() and not get_option('logind').disabled())
+    add_project_arguments('-DHAVE_GAMEMODE', language: 'cpp')
+    src_files += 'src/modules/gamemode.cpp'
+endif
+
+if (upower_glib.found() and giounix.found() and not get_option('logind').disabled())
+    add_project_arguments('-DHAVE_UPOWER', language: 'cpp')
+    src_files += 'src/modules/upower/upower.cpp'
+    src_files += 'src/modules/upower/upower_tooltip.cpp'
 endif
 
 if libpulse.found()
@@ -246,16 +259,14 @@ endif
 if (giounix.found() and not get_option('logind').disabled())
     add_project_arguments('-DHAVE_GIO_UNIX', language: 'cpp')
     src_files += 'src/modules/inhibitor.cpp'
+    src_files += 'src/modules/bluetooth.cpp'
 endif
 
-if get_option('rfkill').enabled()
-    if is_linux
-        add_project_arguments('-DWANT_RFKILL', language: 'cpp')
-        src_files += files(
-            'src/modules/bluetooth.cpp',
-            'src/util/rfkill.cpp'
-        )
-    endif
+if get_option('rfkill').enabled() and is_linux
+    add_project_arguments('-DWANT_RFKILL', language: 'cpp')
+    src_files += files(
+        'src/util/rfkill.cpp'
+    )
 endif
 
 if tz_dep.found()
@@ -288,6 +299,7 @@ executable(
         giounix,
         libnl,
         libnlgen,
+        upower_glib,
         libpulse,
         libudev,
         libepoll,
@@ -296,7 +308,7 @@ executable(
         gtk_layer_shell,
         libsndio,
         tz_dep,
-		xkbregistry 
+		xkbregistry
     ],
     include_directories: [include_directories('include')],
     install: true,
@@ -333,6 +345,7 @@ if scdoc.found()
         'waybar-cpu.5.scd',
         'waybar-custom.5.scd',
         'waybar-disk.5.scd',
+        'waybar-gamemode.5.scd',
         'waybar-idle-inhibitor.5.scd',
         'waybar-keyboard-state.5.scd',
         'waybar-memory.5.scd',
@@ -340,6 +353,7 @@ if scdoc.found()
         'waybar-network.5.scd',
         'waybar-pulseaudio.5.scd',
         'waybar-river-tags.5.scd',
+        'waybar-river-window.5.scd',
         'waybar-sway-language.5.scd',
         'waybar-sway-mode.5.scd',
         'waybar-sway-window.5.scd',
@@ -351,6 +365,7 @@ if scdoc.found()
         'waybar-wlr-workspaces.5.scd',
         'waybar-bluetooth.5.scd',
         'waybar-sndio.5.scd',
+        'waybar-upower.5.scd',
     ]
 
     if (giounix.found() and not get_option('logind').disabled())
