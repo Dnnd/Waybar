@@ -17,8 +17,13 @@
 #include "modules/wlr/workspace_manager.hpp"
 #endif
 #ifdef HAVE_RIVER
+#include "modules/river/mode.hpp"
 #include "modules/river/tags.hpp"
 #include "modules/river/window.hpp"
+#endif
+#ifdef HAVE_HYPRLAND
+#include "modules/hyprland/backend.hpp"
+#include "modules/hyprland/window.hpp"
 #endif
 #if defined(__linux__) && !defined(NO_FILESYSTEM)
 #include "modules/battery.hpp"
@@ -61,6 +66,9 @@
 #ifdef HAVE_GIO_UNIX
 #include "modules/bluetooth.hpp"
 #include "modules/inhibitor.hpp"
+#endif
+#ifdef HAVE_LIBJACK
+#include "modules/jack.hpp"
 #endif
 #include "bar.hpp"
 #include "modules/custom.hpp"

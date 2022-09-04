@@ -79,8 +79,8 @@ is_netbsd = host_machine.system() == 'netbsd'
 is_openbsd = host_machine.system() == 'openbsd'
 
 thread_dep = dependency('threads')
-fmt = dependency('fmt', version : ['>=7.0.0'], fallback : ['fmt', 'fmt_dep'])
-spdlog = dependency('spdlog', version : ['>=1.8.5'], fallback : ['spdlog', 'spdlog_dep'], default_options : ['external_fmt=true'])
+fmt = dependency('fmt', version : ['>=8.1.1'], fallback : ['fmt', 'fmt_dep'])
+spdlog = dependency('spdlog', version : ['>=1.10.0'], fallback : ['spdlog', 'spdlog_dep'], default_options : ['external_fmt=enabled'])
 wayland_client = dependency('wayland-client')
 wayland_cursor = dependency('wayland-cursor')
 wayland_protos = dependency('wayland-protocols')
@@ -98,6 +98,7 @@ libudev = dependency('libudev', required: get_option('libudev'))
 libevdev = dependency('libevdev', required: get_option('libevdev'))
 libmpdclient = dependency('libmpdclient', required: get_option('mpd'))
 xkbregistry = dependency('xkbregistry')
+libjack = dependency('jack', required: get_option('jack'))
 
 libsndio = compiler.find_library('sndio', required: get_option('sndio'))
 if libsndio.found()
@@ -196,8 +197,15 @@ endif
 
 if true
     add_project_arguments('-DHAVE_RIVER', language: 'cpp')
+    src_files += 'src/modules/river/mode.cpp'
     src_files += 'src/modules/river/tags.cpp'
     src_files += 'src/modules/river/window.cpp'
+endif
+
+if true
+    add_project_arguments('-DHAVE_HYPRLAND', language: 'cpp')
+    src_files += 'src/modules/hyprland/backend.cpp'
+    src_files += 'src/modules/hyprland/window.cpp'
 endif
 
 if libnl.found() and libnlgen.found()
@@ -219,6 +227,11 @@ endif
 if libpulse.found()
     add_project_arguments('-DHAVE_LIBPULSE', language: 'cpp')
     src_files += 'src/modules/pulseaudio.cpp'
+endif
+
+if libjack.found()
+    add_project_arguments('-DHAVE_LIBJACK', language: 'cpp')
+    src_files += 'src/modules/jack.cpp'
 endif
 
 if dbusmenu_gtk.found()
@@ -301,6 +314,7 @@ executable(
         libnlgen,
         upower_glib,
         libpulse,
+        libjack,
         libudev,
         libepoll,
         libmpdclient,
@@ -352,6 +366,7 @@ if scdoc.found()
         'waybar-mpd.5.scd',
         'waybar-network.5.scd',
         'waybar-pulseaudio.5.scd',
+        'waybar-river-mode.5.scd',
         'waybar-river-tags.5.scd',
         'waybar-river-window.5.scd',
         'waybar-sway-language.5.scd',

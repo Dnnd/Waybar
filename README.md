@@ -7,9 +7,12 @@
 
 #### Current features
 - Sway (Workspaces, Binding mode, Focused window name)
+- River (Mapping mode, Tags, Focused window name)
+- Hyprland (Focused window name)
 - Tray [#21](https://github.com/Alexays/Waybar/issues/21)
 - Local time
 - Battery
+- UPower
 - Network
 - Bluetooth
 - Pulseaudio
@@ -70,6 +73,7 @@ libmpdclient [MPD module]
 libsndio [sndio module]
 libevdev [KeyboardState module]
 xkbregistry
+upower [UPower battery module]
 ```
 
 **Build dependencies**
@@ -103,6 +107,7 @@ sudo apt install \
   libspdlog-dev \
   libwayland-dev \
   scdoc \
+  upower \
   libxkbregistry-dev
 ```
 
