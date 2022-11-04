@@ -18,7 +18,7 @@
 using waybar::waybar_time;
 
 waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
-    : ALabel(config, "clock", id, "{:%H:%M}", 60, false, false, true),
+    : AButton(config, "clock", id, "{:%H:%M}", 60, false, false, true),
       current_time_zone_idx_(0),
       is_calendar_in_tooltip_(false),
       is_timezoned_list_in_tooltip_(false) {
@@ -61,6 +61,13 @@ waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
     }
   }
 
+  if (is_calendar_in_tooltip_) {
+    if (config_["on-scroll"][kCalendarPlaceholder].isInt()) {
+      calendar_shift_init_ =
+          date::months{config_["on-scroll"].get(kCalendarPlaceholder, 0).asInt()};
+    }
+  }
+
   if (config_["locale"].isString()) {
     locale_ = std::locale(config_["locale"].asString());
   } else {
@@ -93,8 +100,8 @@ bool waybar::modules::Clock::is_timezone_fixed() {
 auto waybar::modules::Clock::update() -> void {
   auto time_zone = current_timezone();
   auto now = std::chrono::system_clock::now();
-  waybar_time wtime = {locale_,
-                       date::make_zoned(time_zone, date::floor<std::chrono::seconds>(now))};
+  waybar_time wtime = {locale_, date::make_zoned(time_zone, date::floor<std::chrono::seconds>(now) +
+                                                                calendar_shift_)};
   std::string text = "";
   std::string timezone_format = get_format_for_timezone(*time_zone);
   if (!is_timezone_fixed()) {
@@ -105,28 +112,24 @@ auto waybar::modules::Clock::update() -> void {
   } else {
     text = fmt::format(timezone_format, wtime);
   }
-  label_.set_markup(text);
+  label_->set_markup(text);
 
   if (tooltipEnabled()) {
     if (config_["tooltip-format"].isString()) {
-      std::string calendar_lines = "";
-      std::string timezoned_time_lines = "";
-      if (is_calendar_in_tooltip_) {
-        calendar_lines = calendar_text(wtime);
-      }
-      if (is_timezoned_list_in_tooltip_) {
-        timezoned_time_lines = timezones_text(&now);
-      }
+      std::string calendar_lines{""};
+      std::string timezoned_time_lines{""};
+      if (is_calendar_in_tooltip_) calendar_lines = calendar_text(wtime);
+      if (is_timezoned_list_in_tooltip_) timezoned_time_lines = timezones_text(&now);
       auto tooltip_format = config_["tooltip-format"].asString();
       text =
           fmt::format(tooltip_format, wtime, fmt::arg(kCalendarPlaceholder.c_str(), calendar_lines),
                       fmt::arg(KTimezonedTimeListPlaceholder.c_str(), timezoned_time_lines));
-      label_.set_tooltip_markup(text);
+      button_.set_tooltip_markup(text);
     }
   }
 
   // Call parent update
-  ALabel::update();
+  AButton::update();
 }
 
 bool waybar::modules::Clock::handleScroll(GdkEventScroll* e) {
@@ -136,20 +139,30 @@ bool waybar::modules::Clock::handleScroll(GdkEventScroll* e) {
   }
 
   auto dir = AModule::getScrollDir(e);
-  if (dir != SCROLL_DIR::UP && dir != SCROLL_DIR::DOWN) {
-    return true;
-  }
-  if (time_zones_.size() == 1) {
-    return true;
-  }
 
-  auto nr_zones = time_zones_.size();
-  if (dir == SCROLL_DIR::UP) {
-    size_t new_idx = current_time_zone_idx_ + 1;
-    current_time_zone_idx_ = new_idx == nr_zones ? 0 : new_idx;
+  // Shift calendar date
+  if (calendar_shift_init_.count() > 0) {
+    if (dir == SCROLL_DIR::UP)
+      calendar_shift_ += calendar_shift_init_;
+    else
+      calendar_shift_ -= calendar_shift_init_;
   } else {
-    current_time_zone_idx_ =
-        current_time_zone_idx_ == 0 ? nr_zones - 1 : current_time_zone_idx_ - 1;
+    // Change time zone
+    if (dir != SCROLL_DIR::UP && dir != SCROLL_DIR::DOWN) {
+      return true;
+    }
+    if (time_zones_.size() == 1) {
+      return true;
+    }
+
+    auto nr_zones = time_zones_.size();
+    if (dir == SCROLL_DIR::UP) {
+      size_t new_idx = current_time_zone_idx_ + 1;
+      current_time_zone_idx_ = new_idx == nr_zones ? 0 : new_idx;
+    } else {
+      current_time_zone_idx_ =
+          current_time_zone_idx_ == 0 ? nr_zones - 1 : current_time_zone_idx_ - 1;
+    }
   }
 
   update();
@@ -158,13 +171,14 @@ bool waybar::modules::Clock::handleScroll(GdkEventScroll* e) {
 
 auto waybar::modules::Clock::calendar_text(const waybar_time& wtime) -> std::string {
   const auto daypoint = date::floor<date::days>(wtime.ztime.get_local_time());
-  const auto ymd = date::year_month_day(daypoint);
-  if (cached_calendar_ymd_ == ymd) {
-    return cached_calendar_text_;
-  }
+  const auto ymd{date::year_month_day{daypoint}};
 
-  const date::year_month ym(ymd.year(), ymd.month());
-  const auto curr_day = ymd.day();
+  if (calendar_cached_ymd_ == ymd) return calendar_cached_text_;
+
+  const auto curr_day{(calendar_shift_init_.count() > 0 && calendar_shift_.count() != 0)
+                          ? date::day{0}
+                          : ymd.day()};
+  const date::year_month ym{ymd.year(), ymd.month()};
   const auto week_format{config_["format-calendar-weekdays"].isString()
                              ? config_["format-calendar-weekdays"].asString()
                              : ""};
@@ -248,8 +262,8 @@ auto waybar::modules::Clock::calendar_text(const waybar_time& wtime) -> std::str
   }
 
   auto result = os.str();
-  cached_calendar_ymd_ = ymd;
-  cached_calendar_text_ = result;
+  calendar_cached_ymd_ = ymd;
+  calendar_cached_text_ = result;
   return result;
 }
 

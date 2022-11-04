@@ -7,7 +7,7 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
     auto hash_pos = name.find('#');
     auto ref = name.substr(0, hash_pos);
     auto id = hash_pos != std::string::npos ? name.substr(hash_pos + 1) : "";
-#if defined(__linux__) && !defined(NO_FILESYSTEM)
+#if defined(__FreeBSD__) || (defined(__linux__) && !defined(NO_FILESYSTEM))
     if (ref == "battery") {
       return new waybar::modules::Battery(id, config_[name]);
     }
@@ -35,6 +35,9 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
     if (ref == "sway/language") {
       return new waybar::modules::sway::Language(id, config_[name]);
     }
+    if (ref == "sway/scratchpad") {
+      return new waybar::modules::sway::Scratchpad(id, config_[name]);
+    }
 #endif
 #ifdef HAVE_WLR
     if (ref == "wlr/taskbar") {
@@ -61,6 +64,9 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
     if (ref == "hyprland/window") {
       return new waybar::modules::hyprland::Window(id, bar_, config_[name]);
     }
+    if (ref == "hyprland/language") {
+      return new waybar::modules::hyprland::Language(id, bar_, config_[name]);
+    }
 #endif
     if (ref == "idle_inhibitor") {
       return new waybar::modules::IdleInhibitor(id, bar_, config_[name]);
@@ -77,6 +83,9 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
 #endif
     if (ref == "clock") {
       return new waybar::modules::Clock(id, config_[name]);
+    }
+    if (ref == "user") {
+      return new waybar::modules::User(id, config_[name]);
     }
     if (ref == "disk") {
       return new waybar::modules::Disk(id, config_[name]);

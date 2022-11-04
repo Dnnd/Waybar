@@ -63,6 +63,11 @@ screensaving, also known as "presentation mode".
 	typeof: double ++
 	Threshold to be used when scrolling.
 
+*start-activated*: ++
+  typeof: bool ++
+  default: *false* ++
+  Whether the inhibit should be activated when starting waybar.
+
 *timeout*: ++
 	typeof: double ++
 	The number of minutes the inhibit should last.
@@ -71,6 +76,14 @@ screensaving, also known as "presentation mode".
 	typeof: bool ++
 	default: true ++
 	Option to disable tooltip on hover.
+
+*tooltip-format-activated*: ++
+	typeof: string ++
+	This format is used when the inhibit is activated.
+
+*tooltip-format-deactivated*: ++
+	typeof: string ++
+	This format is used when the inhibit is deactivated.
 
 # FORMAT REPLACEMENTS
 
