@@ -33,6 +33,9 @@ class Clock : public ALabel {
 
   bool handleScroll(GdkEventScroll* e);
 
+  std::string fmt_str_weeks_;
+  std::string fmt_str_calendar_;
+  int fmt_weeks_left_pad_{0};
   auto calendar_text(const waybar_time& wtime) -> std::string;
   auto weekdays_header(const date::weekday& first_dow, std::ostream& os) -> void;
   auto first_day_of_week() -> date::weekday;

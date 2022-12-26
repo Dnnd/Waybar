@@ -5,6 +5,7 @@
 
 #include <ctime>
 #include <iomanip>
+#include <regex>
 #include <sstream>
 #include <type_traits>
 
@@ -74,6 +75,22 @@ waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
     locale_ = std::locale("");
   }
 
+  if (config_["format-calendar-weeks"].isString()) {
+    fmt_str_weeks_ =
+        std::regex_replace(config_["format-calendar-weeks"].asString(), std::regex("\\{\\}"),
+                           (first_day_of_week() == date::Monday) ? "{:%V}" : "{:%U}");
+    fmt_weeks_left_pad_ =
+        std::regex_replace(fmt_str_weeks_, std::regex("</?[^>]+>|\\{.*\\}"), "").length();
+  } else {
+    fmt_str_weeks_ = "";
+  }
+
+  if (config_["format-calendar"].isString()) {
+    fmt_str_calendar_ = config_["format-calendar"].asString();
+  } else {
+    fmt_str_calendar_ = "{}";
+  }
+
   thread_ = [this] {
     dp.emit();
     auto now = std::chrono::system_clock::now();
@@ -118,8 +135,12 @@ auto waybar::modules::Clock::update() -> void {
     if (config_["tooltip-format"].isString()) {
       std::string calendar_lines{""};
       std::string timezoned_time_lines{""};
-      if (is_calendar_in_tooltip_) calendar_lines = calendar_text(wtime);
-      if (is_timezoned_list_in_tooltip_) timezoned_time_lines = timezones_text(&now);
+      if (is_calendar_in_tooltip_) {
+        calendar_lines = calendar_text(wtime);
+      }
+      if (is_timezoned_list_in_tooltip_) {
+        timezoned_time_lines = timezones_text(&now);
+      }
       auto tooltip_format = config_["tooltip-format"].asString();
       text =
           fmt::format(tooltip_format, wtime, fmt::arg(kCalendarPlaceholder.c_str(), calendar_lines),
@@ -141,7 +162,7 @@ bool waybar::modules::Clock::handleScroll(GdkEventScroll* e) {
   auto dir = AModule::getScrollDir(e);
 
   // Shift calendar date
-  if (calendar_shift_init_.count() > 0) {
+  if (calendar_shift_init_.count() != 0) {
     if (dir == SCROLL_DIR::UP)
       calendar_shift_ += calendar_shift_init_;
     else
@@ -173,73 +194,70 @@ auto waybar::modules::Clock::calendar_text(const waybar_time& wtime) -> std::str
   const auto daypoint = date::floor<date::days>(wtime.ztime.get_local_time());
   const auto ymd{date::year_month_day{daypoint}};
 
-  if (calendar_cached_ymd_ == ymd) return calendar_cached_text_;
+  if (calendar_cached_ymd_ == ymd) {
+    return calendar_cached_text_;
+  }
 
-  const auto curr_day{(calendar_shift_init_.count() > 0 && calendar_shift_.count() != 0)
+  const auto curr_day{(calendar_shift_init_.count() != 0 && calendar_shift_.count() != 0)
                           ? date::day{0}
                           : ymd.day()};
   const date::year_month ym{ymd.year(), ymd.month()};
-  const auto week_format{config_["format-calendar-weekdays"].isString()
-                             ? config_["format-calendar-weekdays"].asString()
-                             : ""};
-  const auto wn_format{config_["format-calendar-weeks"].isString()
-                           ? config_["format-calendar-weeks"].asString()
-                           : ""};
+  const auto first_dow = first_day_of_week();
 
   std::stringstream os;
 
-  const auto first_dow = first_day_of_week();
-  int ws{0};  // weeks-pos: side(1 - left, 2 - right)
+  enum class WeeksSide {
+    LEFT,
+    RIGHT,
+    HIDDEN,
+  };
+  WeeksSide weeks_pos = WeeksSide::HIDDEN;
 
   if (config_["calendar-weeks-pos"].isString()) {
     if (config_["calendar-weeks-pos"].asString() == "left") {
-      ws = 1;
+      weeks_pos = WeeksSide::LEFT;
       // Add paddings before the header
-      os << std::string(4, ' ');
+      os << std::string(3 + fmt_weeks_left_pad_, ' ');
     } else if (config_["calendar-weeks-pos"].asString() == "right") {
-      ws = 2;
+      weeks_pos = WeeksSide::RIGHT;
     }
   }
 
   weekdays_header(first_dow, os);
 
-  // First week prefixed with spaces if needed.
-  auto wd = date::weekday(ym / 1);
+  // First week day prefixed with spaces if needed.
+  date::sys_days print_wd{ym / 1};
+  auto wd{date::weekday{print_wd}};
   auto empty_days = (wd - first_dow).count();
-  date::sys_days lwd{static_cast<date::sys_days>(ym / 1) + date::days{7 - empty_days}};
 
-  if (first_dow == date::Monday) {
-    lwd -= date::days{1};
-  }
   /* Print weeknumber on the left for the first row*/
-  if (ws == 1) {
-    os << fmt::format(wn_format, lwd);
-    os << ' ';
-    lwd += date::weeks{1};
+  if (weeks_pos == WeeksSide::LEFT) {
+    os << fmt::format(fmt_str_weeks_, print_wd) << ' ';
   }
 
   if (empty_days > 0) {
     os << std::string(empty_days * 3 - 1, ' ');
   }
-  auto last_day = (ym / date::literals::last).day();
-  for (auto d = date::day(1); d <= last_day; ++d, ++wd) {
+
+  const auto last_day = (ym / date::literals::last).day();
+
+  for (auto d{date::day{1}}; d <= last_day; ++d, ++wd) {
     if (wd != first_dow) {
       os << ' ';
     } else if (unsigned(d) != 1) {
-      if (ws == 2) {
-        os << ' ';
-        os << fmt::format(wn_format, lwd);
-        lwd += date::weeks{1};
+      if (weeks_pos == WeeksSide::RIGHT) {
+        os << ' ' << fmt::format(fmt_str_weeks_, print_wd);
       }
 
       os << '\n';
 
-      if (ws == 1) {
-        os << fmt::format(wn_format, lwd);
-        os << ' ';
-        lwd += date::weeks{1};
+      print_wd = (ym / d);
+
+      if (weeks_pos == WeeksSide::LEFT) {
+        os << fmt::format(fmt_str_weeks_, print_wd) << ' ';
       }
     }
+
     if (d == curr_day) {
       if (config_["today-format"].isString()) {
         auto today_format = config_["today-format"].asString();
@@ -247,17 +265,17 @@ auto waybar::modules::Clock::calendar_text(const waybar_time& wtime) -> std::str
       } else {
         os << "<b><u>" << date::format("%e", d) << "</u></b>";
       }
-    } else if (config_["format-calendar"].isString()) {
-      os << fmt::format(config_["format-calendar"].asString(), date::format("%e", d));
-    } else
-      os << date::format("%e", d);
+    } else {
+      os << fmt::format(fmt_str_calendar_, date::format("%e", d));
+    }
     /*Print weeks on the right when the endings with spaces*/
-    if (ws == 2 && d == last_day) {
+    if (weeks_pos == WeeksSide::RIGHT && d == last_day) {
       empty_days = 6 - (wd.c_encoding() - first_dow.c_encoding());
-      if (empty_days > 0) {
-        os << std::string(empty_days * 3 + 1, ' ');
-        os << fmt::format(wn_format, lwd);
+      if (empty_days > 0 && empty_days < 7) {
+        os << std::string(empty_days * 3, ' ');
       }
+
+      os << ' ' << fmt::format(fmt_str_weeks_, print_wd);
     }
   }
 
@@ -267,12 +285,14 @@ auto waybar::modules::Clock::calendar_text(const waybar_time& wtime) -> std::str
   return result;
 }
 
-auto waybar::modules::Clock::weekdays_header(const date::weekday& first_dow, std::ostream& os)
+auto waybar::modules::Clock::weekdays_header(const date::weekday& first_week_day, std::ostream& os)
     -> void {
   std::stringstream res;
-  auto wd = first_dow;
+  auto wd = first_week_day;
   do {
-    if (wd != first_dow) res << ' ';
+    if (wd != first_week_day) {
+      res << ' ';
+    }
     Glib::ustring wd_ustring(date::format(locale_, "%a", wd));
     auto clen = ustring_clen(wd_ustring);
     auto wd_len = wd_ustring.length();
@@ -283,8 +303,8 @@ auto waybar::modules::Clock::weekdays_header(const date::weekday& first_dow, std
     }
     const std::string pad(2 - clen, ' ');
     res << pad << wd_ustring;
-  } while (++wd != first_dow);
-  res << "\n";
+  } while (++wd != first_week_day);
+  res << '\n';
 
   if (config_["format-calendar-weekdays"].isString()) {
     os << fmt::format(config_["format-calendar-weekdays"].asString(), res.str());
@@ -310,7 +330,7 @@ auto waybar::modules::Clock::timezones_text(std::chrono::system_clock::time_poin
     wtime = {locale_, date::make_zoned(timezone, date::floor<std::chrono::seconds>(*now))};
 
     std::string timezone_format_config = get_format_for_timezone(*timezone);
-    os << fmt::format(timezone_format_config, wtime) << "\n";
+    os << fmt::format(timezone_format_config, wtime) << '\n';
   }
   return os.str();
 }
