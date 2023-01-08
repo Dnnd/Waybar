@@ -25,8 +25,8 @@
 #ifdef HAVE_HYPRLAND
 #include "modules/hyprland/backend.hpp"
 #include "modules/hyprland/language.hpp"
-#include "modules/hyprland/window.hpp"
 #include "modules/hyprland/submap.hpp"
+#include "modules/hyprland/window.hpp"
 #endif
 #if defined(__FreeBSD__) || (defined(__linux__) && !defined(NO_FILESYSTEM))
 #include "modules/battery.hpp"
@@ -41,6 +41,9 @@
 #include "modules/disk.hpp"
 #ifdef HAVE_DBUSMENU
 #include "modules/sni/tray.hpp"
+#endif
+#ifdef HAVE_MPRIS
+#include "modules/mpris/mpris.hpp"
 #endif
 #ifdef HAVE_LIBNL
 #include "modules/network.hpp"
