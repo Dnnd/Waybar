@@ -64,6 +64,14 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
     if (ref == "river/window") {
       return new waybar::modules::river::Window(id, bar_, config_[name]);
     }
+    if (ref == "river/layout") {
+      return new waybar::modules::river::Layout(id, bar_, config_[name]);
+    }
+#endif
+#ifdef HAVE_DWL
+    if (ref == "dwl/tags") {
+      return new waybar::modules::dwl::Tags(id, bar_, config_[name]);
+    }
 #endif
 #ifdef HAVE_HYPRLAND
     if (ref == "hyprland/window") {
@@ -152,6 +160,11 @@ waybar::AModule* waybar::Factory::makeModule(const std::string& name) const {
 #ifdef HAVE_LIBWIREPLUMBER
     if (ref == "wireplumber") {
       return new waybar::modules::Wireplumber(id, config_[name]);
+    }
+#endif
+#ifdef HAVE_LIBCAVA
+    if (ref == "cava") {
+      return new waybar::modules::Cava(id, config_[name]);
     }
 #endif
     if (ref == "temperature") {

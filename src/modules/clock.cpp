@@ -22,14 +22,19 @@ waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
       is_timezoned_list_in_tooltip_(false) {
   if (config_["timezones"].isArray() && !config_["timezones"].empty()) {
     for (const auto& zone_name : config_["timezones"]) {
-      if (!zone_name.isString() || zone_name.asString().empty()) {
-        time_zones_.push_back(nullptr);
-        continue;
+      if (!zone_name.isString() || zone_name.asString().empty()) continue;
+      try {
+        time_zones_.push_back(date::locate_zone(zone_name.asString()));
+      } catch (const std::exception& e) {
+        spdlog::warn("Timezone: {0}. {1}", zone_name.asString(), e.what());
       }
-      time_zones_.push_back(date::locate_zone(zone_name.asString()));
     }
   } else if (config_["timezone"].isString() && !config_["timezone"].asString().empty()) {
-    time_zones_.push_back(date::locate_zone(config_["timezone"].asString()));
+    try {
+      time_zones_.push_back(date::locate_zone(config_["timezone"].asString()));
+    } catch (const std::exception& e) {
+      spdlog::warn("Timezone: {0}. {1}", config_["timezone"].asString(), e.what());
+    }
   }
 
   // If all timezones are parsed and no one is good, add current time zone. nullptr in timezones
@@ -88,9 +93,11 @@ waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
       fmtMap_.insert({1, config_[kCalendarPlaceholder]["format"]["weekdays"].asString()});
     else
       fmtMap_.insert({1, "{}"});
-    if (config_[kCalendarPlaceholder]["format"]["today"].isString())
+    if (config_[kCalendarPlaceholder]["format"]["today"].isString()) {
       fmtMap_.insert({3, config_[kCalendarPlaceholder]["format"]["today"].asString()});
-    else
+      cldBaseDay_ =
+          date::year_month_day{date::floor<date::days>(std::chrono::system_clock::now())}.day();
+    } else
       fmtMap_.insert({3, "{}"});
     if (config_[kCalendarPlaceholder]["mode"].isString()) {
       const std::string cfgMode{(config_[kCalendarPlaceholder]["mode"].isString())
@@ -124,16 +131,6 @@ waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
         cldCurrShift_ = date::months{0};
         return false;
       });
-    }
-    if (config_[kCalendarPlaceholder]["on-click-left"].isString()) {
-      if (config_[kCalendarPlaceholder]["on-click-left"].asString() == "mode")
-        eventMap_.insert({std::make_pair(1, GdkEventType::GDK_BUTTON_PRESS),
-                          &waybar::modules::Clock::cldModeSwitch});
-    }
-    if (config_[kCalendarPlaceholder]["on-click-right"].isString()) {
-      if (config_[kCalendarPlaceholder]["on-click-right"].asString() == "mode")
-        eventMap_.insert({std::make_pair(3, GdkEventType::GDK_BUTTON_PRESS),
-                          &waybar::modules::Clock::cldModeSwitch});
     }
   }
 
@@ -171,6 +168,9 @@ auto waybar::modules::Clock::update() -> void {
   auto ztime = date::zoned_time{time_zone, date::floor<std::chrono::seconds>(now)};
 
   auto shifted_date = date::year_month_day{date::floor<date::days>(now)} + cldCurrShift_;
+  if (cldCurrShift_.count()) {
+    shifted_date = date::year_month_day(shifted_date.year(), shifted_date.month(), date::day(1));
+  }
   auto now_shifted = date::sys_days{shifted_date} + (now - date::floor<date::days>(now));
   auto shifted_ztime = date::zoned_time{time_zone, date::floor<std::chrono::seconds>(now_shifted)};
 
@@ -208,56 +208,12 @@ auto waybar::modules::Clock::update() -> void {
   ALabel::update();
 }
 
-bool waybar::modules::Clock::handleToggle(GdkEventButton* const& e) {
-  const std::map<std::pair<uint, GdkEventType>, void (waybar::modules::Clock::*)()>::const_iterator&
-      rec{eventMap_.find(std::pair(e->button, e->type))};
-
-  const auto callMethod{(rec != eventMap_.cend()) ? rec->second : nullptr};
-
-  if (callMethod) {
-    (this->*callMethod)();
+auto waybar::modules::Clock::doAction(const std::string& name) -> void {
+  if ((actionMap_[name])) {
+    (this->*actionMap_[name])();
+    update();
   } else
-    return ALabel::handleToggle(e);
-
-  update();
-  return true;
-}
-
-bool waybar::modules::Clock::handleScroll(GdkEventScroll* e) {
-  // defer to user commands if set
-  if (config_["on-scroll-up"].isString() || config_["on-scroll-down"].isString()) {
-    return AModule::handleScroll(e);
-  }
-
-  auto dir = AModule::getScrollDir(e);
-
-  // Shift calendar date
-  if (cldShift_.count() != 0) {
-    if (dir == SCROLL_DIR::UP)
-      cldCurrShift_ += ((cldMode_ == CldMode::YEAR) ? 12 : 1) * cldShift_;
-    else
-      cldCurrShift_ -= ((cldMode_ == CldMode::YEAR) ? 12 : 1) * cldShift_;
-  } else {
-    // Change time zone
-    if (dir != SCROLL_DIR::UP && dir != SCROLL_DIR::DOWN) {
-      return true;
-    }
-    if (time_zones_.size() == 1) {
-      return true;
-    }
-
-    auto nr_zones = time_zones_.size();
-    if (dir == SCROLL_DIR::UP) {
-      size_t new_idx = current_time_zone_idx_ + 1;
-      current_time_zone_idx_ = new_idx == nr_zones ? 0 : new_idx;
-    } else {
-      current_time_zone_idx_ =
-          current_time_zone_idx_ == 0 ? nr_zones - 1 : current_time_zone_idx_ - 1;
-    }
-  }
-
-  update();
-  return true;
+    spdlog::error("Clock. Unsupported action \"{0}\"", name);
 }
 
 // The number of weeks in calendar month layout plus 1 more for calendar titles
@@ -366,6 +322,7 @@ auto waybar::modules::Clock::get_calendar(const date::zoned_seconds& now,
   const auto ymd{date::year_month_day{daypoint}};
   const auto ym{ymd.year() / ymd.month()};
   const auto y{ymd.year()};
+  const auto d{ymd.day()};
   const auto firstdow = first_day_of_week();
   const auto maxRows{12 / cldMonCols_};
   std::ostringstream os;
@@ -376,13 +333,19 @@ auto waybar::modules::Clock::get_calendar(const date::zoned_seconds& now,
 
   if (cldMode_ == CldMode::YEAR) {
     if (y / date::month{1} / 1 == cldYearShift_)
-      return cldYearCached_;
+      if (d == cldBaseDay_ || (uint)cldBaseDay_ == 0u)
+        return cldYearCached_;
+      else
+        cldBaseDay_ = d;
     else
       cldYearShift_ = y / date::month{1} / 1;
   }
   if (cldMode_ == CldMode::MONTH) {
     if (ym == cldMonShift_)
-      return cldMonCached_;
+      if (d == cldBaseDay_ || (uint)cldBaseDay_ == 0u)
+        return cldMonCached_;
+      else
+        cldBaseDay_ = d;
     else
       cldMonShift_ = ym;
   }
@@ -466,8 +429,30 @@ auto waybar::modules::Clock::get_calendar(const date::zoned_seconds& now,
   return os.str();
 }
 
+/*Clock actions*/
 void waybar::modules::Clock::cldModeSwitch() {
   cldMode_ = (cldMode_ == CldMode::YEAR) ? CldMode::MONTH : CldMode::YEAR;
+}
+void waybar::modules::Clock::cldShift_up() {
+  cldCurrShift_ += ((cldMode_ == CldMode::YEAR) ? 12 : 1) * cldShift_;
+}
+void waybar::modules::Clock::cldShift_down() {
+  cldCurrShift_ -= ((cldMode_ == CldMode::YEAR) ? 12 : 1) * cldShift_;
+}
+void waybar::modules::Clock::tz_up() {
+  auto nr_zones = time_zones_.size();
+
+  if (nr_zones == 1) return;
+
+  size_t new_idx = current_time_zone_idx_ + 1;
+  current_time_zone_idx_ = new_idx == nr_zones ? 0 : new_idx;
+}
+void waybar::modules::Clock::tz_down() {
+  auto nr_zones = time_zones_.size();
+
+  if (nr_zones == 1) return;
+
+  current_time_zone_idx_ = current_time_zone_idx_ == 0 ? nr_zones - 1 : current_time_zone_idx_ - 1;
 }
 
 auto waybar::modules::Clock::timezones_text(std::chrono::system_clock::time_point* now)

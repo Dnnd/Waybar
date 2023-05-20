@@ -30,6 +30,7 @@ Also a minimal example configuration can be found on the at the bottom of this m
 *output* ++
 	typeof: string|array ++
 	Specifies on which screen this bar will be displayed. Exclamation mark(*!*) can be used to exclude specific output.
+	In an array, star '*\**' can be used at the end to accept all outputs, in case all previous entries are exclusions.
 
 *position* ++
 	typeof: string ++
@@ -242,6 +243,7 @@ A module group is defined by specifying a module named "group/some-group-name". 
 	"modules-right": ["group/hardware", "clock"],
 
 	"group/hardware": {
+		"orientation": "vertical",
 		"modules": [
 			"cpu",
 			"memory",
@@ -252,6 +254,8 @@ A module group is defined by specifying a module named "group/some-group-name". 
 	...
 }
 ```
+
+Valid options for the (optional) "orientation" property are: "horizontal", "vertical", "inherit", and "orthogonal" (default).
 
 # SUPPORTED MODULES
 
@@ -273,6 +277,7 @@ A module group is defined by specifying a module named "group/some-group-name". 
 - *waybar-river-mode(5)*
 - *waybar-river-tags(5)*
 - *waybar-river-window(5)*
+- *waybar-river-layout(5)*
 - *waybar-states(5)*
 - *waybar-sway-mode(5)*
 - *waybar-sway-scratchpad(5)*

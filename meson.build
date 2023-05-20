@@ -2,7 +2,7 @@ project(
     'waybar', 'cpp', 'c',
     version: '0.9.17',
     license: 'MIT',
-    meson_version: '>= 0.49.0',
+    meson_version: '>= 0.50.0',
     default_options : [
         'cpp_std=c++17',
         'buildtype=release',
@@ -172,8 +172,10 @@ src_files = files(
     'src/group.cpp',
     'src/util/ustring_clen.cpp',
     'src/util/sanitize_str.cpp',
-    'src/util/rewrite_title.cpp'
+    'src/util/rewrite_string.cpp'
 )
+
+inc_dirs = ['include']
 
 if is_linux
     add_project_arguments('-DHAVE_CPU_LINUX', language: 'cpp')
@@ -224,6 +226,12 @@ if true
     src_files += 'src/modules/river/mode.cpp'
     src_files += 'src/modules/river/tags.cpp'
     src_files += 'src/modules/river/window.cpp'
+    src_files += 'src/modules/river/layout.cpp'
+endif
+
+if true
+    add_project_arguments('-DHAVE_DWL', language: 'cpp')
+    src_files += 'src/modules/dwl/tags.cpp'
 endif
 
 if true
@@ -333,6 +341,17 @@ if get_option('experimental')
     add_project_arguments('-DUSE_EXPERIMENTAL', language: 'cpp')
 endif
 
+cava = dependency('cava',
+                  version : '>=0.8.4',
+                  required: get_option('cava'),
+                  fallback : ['cava', 'cava_dep'],
+                  not_found_message: 'cava is not found. Building waybar without cava')
+
+if cava.found()
+   add_project_arguments('-DHAVE_LIBCAVA', language: 'cpp')
+   src_files += 'src/modules/cava.cpp'
+endif
+
 subdir('protocol')
 
 executable(
@@ -366,9 +385,10 @@ executable(
         gtk_layer_shell,
         libsndio,
         tz_dep,
-		xkbregistry
+		xkbregistry,
+        cava
     ],
-    include_directories: [include_directories('include')],
+    include_directories: inc_dirs,
     install: true,
 )
 
@@ -415,6 +435,7 @@ if scdoc.found()
         'waybar-river-mode.5.scd',
         'waybar-river-tags.5.scd',
         'waybar-river-window.5.scd',
+        'waybar-river-layout.5.scd',
         'waybar-sway-language.5.scd',
         'waybar-sway-mode.5.scd',
         'waybar-sway-scratchpad.5.scd',
@@ -428,6 +449,8 @@ if scdoc.found()
         'waybar-bluetooth.5.scd',
         'waybar-sndio.5.scd',
         'waybar-upower.5.scd',
+        'waybar-wireplumber.5.scd',
+        'waybar-dwl-tags.5.scd',
     ]
 
     if (giounix.found() and not get_option('logind').disabled())
